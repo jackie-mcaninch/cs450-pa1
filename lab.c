@@ -22,13 +22,14 @@ struct execcmd {
   int type;              // ' '
   char *argv[MAXARGS];   // arguments to the command to be exec-ed
 };
-
+// definitions for parallel command object
 struct parcmd {
   int type;            // &
   struct cmd *left;    // the command to be run (e.g., an execcmd)
   struct cmd *right;   // the input/output file
 };
 
+// definitions for sequential command object
 struct seqcmd {
   int type;          // ;
   struct cmd *left;  // first command to be run
@@ -43,40 +44,55 @@ void
 runcmd(struct cmd *cmd)
 {
   int r;
+  pid_t pid;
   struct execcmd *ecmd;
   struct seqcmd *scmd;
   struct parcmd *pcmd;
 
-  if(cmd == 0)
+  if(cmd == 0) {
     exit(0);
+  }
   
   switch(cmd->type){
   default:
     fprintf(stderr, "unknown runcmd\n");
     exit(-1);
 
+  // decision branch for different command function ( ; or & )
   case ' ':
+    //fprintf(stdout, "case: exec\n");
     ecmd = (struct execcmd*)cmd;
     if(ecmd->argv[0] == 0)
       exit(0);
-    execvp(ecmd->argv[0], ecmd->argv);
+    pid = fork1();
+    if(pid==0) {
+      if(execvp(ecmd->argv[0], ecmd->argv) < 0) {
+        fprintf(stderr, "Exec failed\n");
+      }
+    }
+    waitpid(pid, &r, 0);
     break;
 
   case ';':
+    //fprintf(stdout, "case: seq\n");
     scmd = (struct seqcmd*)cmd;
-    if(fork1()==0) {
+    pid = fork1();
+    if(pid==0) {
       runcmd(scmd->left);
     }
-    wait(&r);
+    waitpid(pid, &r, 0);
     runcmd(scmd->right);
     break;
 
   case '&':
+    //fprintf(stdout, "case: par\n");
     pcmd = (struct parcmd*)cmd;
-    if (fork1()==0) {
+    pid = fork1();
+    if (pid==0) {
         runcmd(pcmd->left);
     }
     runcmd(pcmd->right);
+    waitpid(pid, &r, 0);
     break;
   }    
   exit(0);
@@ -111,8 +127,9 @@ main(void)
         fprintf(stderr, "cannot cd %s\n", buf+3);
       continue;
     }
-    if(fork1() == 0)
+    if(fork1() == 0) {
       runcmd(parsecmd(buf));
+    }
     wait(&r);
   }
   exit(0);
@@ -296,6 +313,6 @@ parseexec(char **ps, char *es)
       exit(-1);
     }
   }
-  cmd->argv[argc] = 0;
+  cmd->argv[argc] = 0; // null terminate the arguments string
   return ret;
 }
