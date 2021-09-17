@@ -278,6 +278,7 @@ parsecmd(char *s)
   return cmd;
 }
 
+// modified this method to split commands by ';' and '&' characters instead of '|' '<' and '>'
 struct cmd*
 parseline(char **ps, char *es)
 {
