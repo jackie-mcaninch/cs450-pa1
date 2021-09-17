@@ -288,6 +288,7 @@ parseline(char **ps, char *es)
     gettoken(ps, es, 0, 0);
     cmd = sequential_cmd(cmd, parseline(ps, es));
   }
+  // added in check for & at end of line
   else if (peek(ps, es, "&")) {
     gettoken(ps, es, 0, 0);
     if (*ps == es || **ps==';') {
@@ -299,7 +300,7 @@ parseline(char **ps, char *es)
   return cmd;
 }
 
-
+// parsepipe and parseredirs were removed for this assignment, everything now done in parseline and parseexec
 struct cmd*
 parseexec(char **ps, char *es)
 {
@@ -312,6 +313,7 @@ parseexec(char **ps, char *es)
   cmd = (struct execcmd*)ret;
 
   argc = 0;
+  // modified list of sensitive tokens
   while(!peek(ps, es, "&;")) {
     if((tok=gettoken(ps, es, &q, &eq)) == 0)
       break;
