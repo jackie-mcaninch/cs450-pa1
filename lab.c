@@ -58,23 +58,25 @@ runcmd(struct cmd *cmd)
     fprintf(stderr, "unknown runcmd\n");
     exit(-1);
 
-  // decision branch for different command function ( ; or & )
+  // decision branches for different command function ( ; or & )
   case ' ':
-    //fprintf(stdout, "case: exec\n");
     ecmd = (struct execcmd*)cmd;
     if(ecmd->argv[0] == 0)
       exit(0);
+    
+    // modified this section to execute given command and wait for the command to finish
     pid = fork1();
     if(pid==0) {
       if(execvp(ecmd->argv[0], ecmd->argv) < 0) {
-        fprintf(stderr, "Exec failed\n");
+        fprintf(stderr, "Unknown command... exec failed\n");
       }
     }
     waitpid(pid, &r, 0);
     break;
 
+  // modified this section to fork and have child execute the left side of the separator
+  // parent waits for child to finish executing then executes right side of separator
   case ';':
-    //fprintf(stdout, "case: seq\n");
     scmd = (struct seqcmd*)cmd;
     pid = fork1();
     if(pid==0) {
@@ -84,8 +86,9 @@ runcmd(struct cmd *cmd)
     runcmd(scmd->right);
     break;
 
+  // modified this section to fork and both left side and right side of the operator run in parallel
+  // but function waits for both to finish execution before retrieving the next command
   case '&':
-    //fprintf(stdout, "case: par\n");
     pcmd = (struct parcmd*)cmd;
     pid = fork1();
     if (pid==0) {
@@ -103,6 +106,7 @@ getcmd(char *buf, int nbuf)
 {
   
   if (isatty(fileno(stdin)))
+    // modified this line to adjust command prompt
     fprintf(stdout, "$CS450 ");
   memset(buf, 0, nbuf);
   fgets(buf, nbuf, stdin);
@@ -116,6 +120,7 @@ main(void)
 {
   static char buf[100];
   int r;
+  pid_t pid;
 
   // Read and run input commands.
   while(getcmd(buf, sizeof(buf)) >= 0){
@@ -127,10 +132,12 @@ main(void)
         fprintf(stderr, "cannot cd %s\n", buf+3);
       continue;
     }
-    if(fork1() == 0) {
+    pid = fork1();
+    if(pid == 0) {
       runcmd(parsecmd(buf));
     }
-    wait(&r);
+    //changed to waitpid() so that it can handle multiple nested processes finishing to completion
+    waitpid(pid, &r, 0);
   }
   exit(0);
 }
@@ -157,6 +164,7 @@ execcmd(void)
   return (struct cmd*)cmd;
 }
 
+// modified to parse the command string into the parallel command struct
 struct cmd*
 parallel_cmd(struct cmd *left, struct cmd *right)
 {
@@ -170,6 +178,8 @@ parallel_cmd(struct cmd *left, struct cmd *right)
   return (struct cmd*)cmd;
 }
 
+// modified to parse the command string into the sequential command struct
+// only differs to parallel_cmd by type
 struct cmd*
 sequential_cmd(struct cmd *left, struct cmd *right)
 {
@@ -203,6 +213,8 @@ gettoken(char **ps, char *es, char **q, char **eq)
   switch(*s){
   case 0:
     break;
+  
+  // modified switch cases to recognize the new sensitive characters
   case ';':
   case '&':
     s++;
@@ -278,7 +290,7 @@ parseline(char **ps, char *es)
   else if (peek(ps, es, "&")) {
     gettoken(ps, es, 0, 0);
     if (*ps == es || **ps==';') {
-      printf("Cannot terminate command with \"&\"\n");
+      fprintf(stdout,"Cannot terminate command with \"&\"\n");
       exit(0);
     }
     cmd = parallel_cmd(cmd, parseline(ps, es));
